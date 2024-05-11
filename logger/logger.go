@@ -91,6 +91,10 @@ var defaultLogger *zap.Logger
 
 var loggers = make(map[string]*zap.Logger)
 
+func InitDefaultManual(loggerConfig *Config) {
+	defaultLogger = doInit("", loggerConfig)
+}
+
 func InitDefault(c config.ConfigSet) {
 	defaultLogger = Init("", c)
 }
@@ -101,11 +105,9 @@ func RegisterAdditionalLogger(moduleName string) {
 	}
 
 	cfg := defaultLoggerConfig.Clone().(*Config)
-	if moduleName != "" {
-		cfg.LogPath = "logs/" + moduleName + ".log"
-		name := moduleName + "-" + ModuleName
-		config.RegisterModuleConfig(name, cfg)
-	}
+	cfg.LogPath = "logs/" + moduleName + ".log"
+	name := moduleName + "-" + ModuleName
+	config.RegisterModuleConfig(name, cfg)
 	return
 }
 
@@ -122,6 +124,10 @@ func Init(moduleName string, c config.ConfigSet) *zap.Logger {
 	} else {
 		loggerConfig = t.(*Config)
 	}
+	return doInit(moduleName, loggerConfig)
+}
+
+func doInit(moduleName string, loggerConfig *Config) *zap.Logger {
 	var writeSyncer zapcore.WriteSyncer
 	if loggerConfig.LogPath == "stdout" {
 		writeSyncer = os.Stdout
@@ -144,4 +150,5 @@ func Init(moduleName string, c config.ConfigSet) *zap.Logger {
 	l := zap.New(core, zap.AddStacktrace(zap.ErrorLevel), zap.WithCaller(true), zap.AddCallerSkip(1))
 	loggers[moduleName] = l
 	return l
+
 }
