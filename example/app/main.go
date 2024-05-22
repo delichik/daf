@@ -12,7 +12,7 @@ func main() {
 	app.AfterRun(func() {
 		logger.Info("after run")
 	})
-	app.RegisterAutoLoadModule(&DemoNoConfModule{}, &app.NoConfig{})
-	app.RegisterModule(&DemoModule{}, &DemoModuleConfig{})
+	app.RegisterAutoLoadModule[app.NoConfig](&DemoNoConfModule{})
+	app.RegisterModule[DemoModuleConfig](&DemoModule{})
 	app.Run("0.0.1")
 }

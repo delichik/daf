@@ -36,7 +36,7 @@ func TestManager_Init(t *testing.T) {
 	defer func() {
 		_ = os.Remove("./test.yaml")
 	}()
-	m := NewManager(context.Background(), "./test.yaml")
+	m := NewManager(context.Background(), "./test.yaml", false)
 	err := m.Init()
 	if err != nil {
 		t.Error("init failed", err.Error())
@@ -49,7 +49,7 @@ func TestManager_GetModuleConfig(t *testing.T) {
 	defer func() {
 		_ = os.Remove("./test.yaml")
 	}()
-	m := NewManager(context.Background(), "./test.yaml")
+	m := NewManager(context.Background(), "./test.yaml", false)
 	err := m.Init()
 	if err != nil {
 		t.Error("init failed", err.Error())
@@ -74,7 +74,7 @@ func TestManager_ModifyModuleConfig(t *testing.T) {
 		_ = os.Remove("./test.yaml")
 	}()
 	modified := false
-	m := NewManager(context.Background(), "./test.yaml")
+	m := NewManager(context.Background(), "./test.yaml", true)
 	m.SetReloadCallback(func(name string, config ModuleConfig) {
 		if name == "test" {
 			modified = true

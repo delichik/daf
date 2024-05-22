@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"log"
@@ -18,14 +19,15 @@ import (
 )
 
 var (
-	gCtx                context.Context
-	gCancel             context.CancelFunc
-	cm                  *config.Manager
-	beforeRunCall       func()
-	afterRunCall        func()
-	modules             map[string]*ModuleEntry
-	orderedModules      []*ModuleEntry
-	autoLoadModuleCount int
+	gCtx                 context.Context
+	gCancel              context.CancelFunc
+	cm                   *config.Manager
+	beforeRunCall        func()
+	afterRunCall         func()
+	modules              map[string]*ModuleEntry
+	orderedModules       []*ModuleEntry
+	autoLoadModuleCount  int
+	disableRefreshConfig bool
 )
 
 func init() {
@@ -57,16 +59,20 @@ func parseFlags(version string) CommandLineVars {
 	return clvs
 }
 
-func RegisterAutoLoadModule[T config.ModuleConfig](module Module[T], cfg T) {
-	registerModule(module, cfg)
+func RegisterAutoLoadModule[T config.ModuleConfig](module Module[T]) {
+	registerModule(module)
 	autoLoadModuleCount++
 }
 
-func RegisterModule[T config.ModuleConfig](module Module[T], cfg T) {
-	registerModule(module, cfg)
+func RegisterModule[T config.ModuleConfig](module Module[T]) {
+	registerModule(module)
 }
 
-func registerModule[T config.ModuleConfig](module Module[T], cfg T) {
+func DisableRefreshConfig() {
+	disableRefreshConfig = true
+}
+
+func registerModule[T config.ModuleConfig](module Module[T]) {
 	existedModule, ok := modules[module.Name()]
 	if ok {
 		panic(fmt.Errorf("module %s already registered by %s",
@@ -77,7 +83,9 @@ func registerModule[T config.ModuleConfig](module Module[T], cfg T) {
 	modules[module.Name()] = moduleEntry
 	orderedModules = append(orderedModules, moduleEntry)
 
-	if !reflect.TypeOf(cfg).Implements(noConfigIfaceType) {
+	var cfg T
+	rt := reflect.TypeOf(cfg)
+	if !rt.Implements(noConfigIfaceType) {
 		config.RegisterModuleConfig(module.Name(), cfg)
 	}
 }
@@ -93,9 +101,8 @@ func AfterRun(call func()) {
 func Run(version string) {
 	ctx, cancel := context.WithCancel(context.Background())
 	clvs := parseFlags(version)
-	cm = config.NewManager(ctx, clvs.ConfigPath)
+	cm = config.NewManager(ctx, clvs.ConfigPath, !disableRefreshConfig)
 	for _, module := range orderedModules {
-
 		module.SetConfigManager(cm)
 		if module.noConfig {
 			continue
@@ -125,6 +132,12 @@ func Run(version string) {
 	}
 	logger.Info("Loading app modules")
 	for i, module := range orderedModules {
+		err = module.OnInit(ctx)
+		if err != nil {
+			logger.Fatal("Init module failed",
+				zap.String("name", module.Name()),
+				zap.Error(err))
+		}
 		logger.Debug("Prepare module",
 			zap.String("name", module.Name()),
 			zap.Bool("auto_loaded", i < autoLoadModuleCount))
@@ -142,7 +155,7 @@ func Run(version string) {
 					zap.Error(err))
 			}
 		}
-		err = module.OnRun(ctx)
+		err = module.OnRun()
 		if err != nil {
 			logger.Fatal("Run module failed",
 				zap.String("name", module.Name()),
@@ -187,8 +200,16 @@ func ReloadConfig(name string, cfg config.ModuleConfig) {
 	logger.Info("Reloading module config", zap.String("name", name))
 	err := module.ApplyConfig(cfg)
 	if err != nil {
-		logger.Error("Apply module config failed",
-			zap.String("name", name),
-			zap.Error(err))
+		var fatalError *FatalError
+		ok = errors.As(err, &fatalError)
+		if ok {
+			logger.Fatal("Apply module config failed with fatal error",
+				zap.String("name", name),
+				zap.Error(fatalError))
+		} else {
+			logger.Error("Apply module config failed",
+				zap.String("name", name),
+				zap.Error(err))
+		}
 	}
 }

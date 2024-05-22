@@ -9,7 +9,7 @@ type DemoNoConfModule struct {
 	app.DefaultLoggerModule
 }
 
-func (m *DemoNoConfModule) ApplyConfig(_ *app.NoConfig) error {
+func (m *DemoNoConfModule) ApplyConfig(_ app.NoConfig) error {
 	return nil
 }
 

@@ -12,22 +12,23 @@ var noConfigIfaceType = reflect.TypeOf((*noConfigIface)(nil)).Elem()
 type noConfigIface interface {
 	__NoConfig()
 }
+type NoConfig = *noConfig
 
-type NoConfig struct{}
+type noConfig struct{}
 
-func (c *NoConfig) Check() error {
+func (c *noConfig) Check() error {
 	return nil
 }
 
-func (c *NoConfig) Clone() config.ModuleConfig {
+func (c *noConfig) Clone() config.ModuleConfig {
 	return c
 }
 
-func (c *NoConfig) Compare(_ config.ModuleConfig) bool {
+func (c *noConfig) Compare(_ config.ModuleConfig) bool {
 	return true
 }
 
-func (c *NoConfig) __NoConfig() {}
+func (c *noConfig) __NoConfig() {}
 
 type AdditionalLoggerModule struct{}
 

@@ -11,9 +11,10 @@ import (
 type ReloadCallback func(name string, config ModuleConfig)
 
 type Manager struct {
-	path string
-	ctx  context.Context
-	wg   sync.WaitGroup
+	path  string
+	ctx   context.Context
+	wg    sync.WaitGroup
+	watch bool
 
 	locker         sync.RWMutex
 	loadConfigChan chan struct{}
@@ -22,11 +23,12 @@ type Manager struct {
 	reloadCallback ReloadCallback
 }
 
-func NewManager(ctx context.Context, path string) *Manager {
+func NewManager(ctx context.Context, path string, watch bool) *Manager {
 	return &Manager{
 		path:           path,
 		ctx:            ctx,
 		loadConfigChan: make(chan struct{}, 1),
+		watch:          watch,
 	}
 }
 
@@ -49,11 +51,13 @@ func (m *Manager) Init() error {
 		return err
 	}
 
-	m.wg.Add(1)
-	go func() {
-		defer m.wg.Done()
-		m.watchConfig()
-	}()
+	if m.watch {
+		m.wg.Add(1)
+		go func() {
+			defer m.wg.Done()
+			m.watchConfig()
+		}()
+	}
 	return nil
 }
 
