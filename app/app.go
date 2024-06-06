@@ -83,9 +83,14 @@ func registerModule[T config.ModuleConfig](module Module[T]) {
 	modules[module.Name()] = moduleEntry
 	orderedModules = append(orderedModules, moduleEntry)
 
-	var cfg T
-	rt := reflect.TypeOf(cfg)
+	rt := reflect.TypeFor[T]()
+	rv := reflect.Zero(rt)
+	if rt.Kind() == reflect.Pointer {
+		rv = reflect.New(rt.Elem())
+	}
+
 	if !rt.Implements(noConfigIfaceType) {
+		cfg := rv.Interface().(config.ModuleConfig)
 		config.RegisterModuleConfig(module.Name(), cfg)
 	}
 }
