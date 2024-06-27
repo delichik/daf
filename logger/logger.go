@@ -41,6 +41,7 @@ type Config struct {
 	MaxAge    int    `yaml:"max-age" comment:"Maximum saving days of a log backup"`
 	Compress  bool   `yaml:"compress" comment:"Compress the backups"`
 
+	LogDriver zapcore.WriteSyncer `yaml:"-"`
 	logLevel   zapcore.Level `yaml:"-"`
 	ModePrefix string        `yaml:"-"`
 }
@@ -57,11 +58,11 @@ func (c *Config) Check() error {
 		return errors.New(`format: must be "json" or "text"`)
 	}
 
-	if len(c.LogPath) == 0 {
+	if len(c.LogPath) == 0 && c.LogDriver == nil {
 		return errors.New(`log_path: required`)
 	}
 
-	if c.LogPath != "stdout" {
+	if c.LogPath != "stdout" && c.LogDriver == nil {
 		if c.MaxSize <= 0 {
 			return errors.New(`max_size: must grater than 0`)
 		}
@@ -129,7 +130,9 @@ func Init(moduleName string, c config.ConfigSet) *zap.Logger {
 
 func doInit(moduleName string, loggerConfig *Config) *zap.Logger {
 	var writeSyncer zapcore.WriteSyncer
-	if loggerConfig.LogPath == "stdout" {
+	if c.LogDriver != nil {
+		writeSyncer = c.LogDriver
+	} else if c.LogPath == "stdout" {
 		writeSyncer = os.Stdout
 	} else {
 		writeSyncer = zapcore.AddSync(&lumberjack.Logger{
@@ -150,5 +153,4 @@ func doInit(moduleName string, loggerConfig *Config) *zap.Logger {
 	l := zap.New(core, zap.AddStacktrace(zap.ErrorLevel), zap.WithCaller(true), zap.AddCallerSkip(1))
 	loggers[moduleName] = l
 	return l
-
 }
