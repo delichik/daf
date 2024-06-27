@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/delichik/daf/app"
+	"github.com/delichik/daf"
 	"github.com/delichik/daf/config"
 	"github.com/delichik/daf/logger"
 	"github.com/delichik/daf/utils"
@@ -40,7 +40,7 @@ func (c *demoModuleConfig) Compare(moduleConfig config.ModuleConfig) bool {
 }
 
 type DemoModule struct {
-	app.DefaultLoggerModule
+	daf.DefaultLoggerModule
 }
 
 func (m *DemoModule) Name() string {
@@ -52,7 +52,11 @@ func (m *DemoModule) ApplyConfig(_ *demoModuleConfig) error {
 	return nil
 }
 
-func (m *DemoModule) OnRun(_ context.Context) error {
+func (m *DemoModule) OnInit(_ context.Context) error {
+	return nil
+}
+
+func (m *DemoModule) OnRun() error {
 	logger.Info("on run")
 	go func() {
 		ticker := time.NewTicker(1 * time.Second)
@@ -61,7 +65,7 @@ func (m *DemoModule) OnRun(_ context.Context) error {
 			logger.Info("shutdown after " + strconv.Itoa(i))
 			<-ticker.C
 		}
-		app.Shutdown()
+		daf.Shutdown()
 	}()
 	return nil
 }

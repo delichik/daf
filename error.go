@@ -1,4 +1,4 @@
-package app
+package daf
 
 type FatalError struct {
 	msg         string

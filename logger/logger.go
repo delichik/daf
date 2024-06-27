@@ -41,9 +41,9 @@ type Config struct {
 	MaxAge    int    `yaml:"max-age" comment:"Maximum saving days of a log backup"`
 	Compress  bool   `yaml:"compress" comment:"Compress the backups"`
 
-	LogDriver zapcore.WriteSyncer `yaml:"-"`
-	logLevel   zapcore.Level `yaml:"-"`
-	ModePrefix string        `yaml:"-"`
+	LogDriver  zapcore.WriteSyncer `yaml:"-"`
+	logLevel   zapcore.Level       `yaml:"-"`
+	ModePrefix string              `yaml:"-"`
 }
 
 func (c *Config) Check() error {
@@ -130,9 +130,9 @@ func Init(moduleName string, c config.ConfigSet) *zap.Logger {
 
 func doInit(moduleName string, loggerConfig *Config) *zap.Logger {
 	var writeSyncer zapcore.WriteSyncer
-	if c.LogDriver != nil {
-		writeSyncer = c.LogDriver
-	} else if c.LogPath == "stdout" {
+	if loggerConfig.LogDriver != nil {
+		writeSyncer = loggerConfig.LogDriver
+	} else if loggerConfig.LogPath == "stdout" {
 		writeSyncer = os.Stdout
 	} else {
 		writeSyncer = zapcore.AddSync(&lumberjack.Logger{

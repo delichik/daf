@@ -1,4 +1,4 @@
-package app
+package daf
 
 import (
 	"context"
@@ -48,7 +48,11 @@ func (m *DefaultLoggerModule) AdditionalLogger() bool {
 
 type InitializerModule struct{}
 
-func (m *InitializerModule) OnRun(_ context.Context) error {
+func (m *InitializerModule) OnInit(_ context.Context) error {
+	return nil
+}
+
+func (m *InitializerModule) OnRun() error {
 	return nil
 }
 

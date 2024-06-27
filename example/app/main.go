@@ -1,18 +1,18 @@
 package main
 
 import (
-	"github.com/delichik/daf/app"
+	"github.com/delichik/daf"
 	"github.com/delichik/daf/logger"
 )
 
 func main() {
-	app.BeforeRun(func() {
+	daf.BeforeRun(func() {
 		logger.Info("before run")
 	})
-	app.AfterRun(func() {
+	daf.AfterRun(func() {
 		logger.Info("after run")
 	})
-	app.RegisterAutoLoadModule[app.NoConfig](&DemoNoConfModule{})
-	app.RegisterModule[DemoModuleConfig](&DemoModule{})
-	app.Run("0.0.1")
+	daf.RegisterAutoLoadModule[daf.NoConfig](&DemoNoConfModule{})
+	daf.RegisterModule[DemoModuleConfig](&DemoModule{})
+	daf.Run("0.0.1")
 }

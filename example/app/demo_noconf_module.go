@@ -1,15 +1,15 @@
 package main
 
 import (
-	"github.com/delichik/daf/app"
+	"github.com/delichik/daf"
 )
 
 type DemoNoConfModule struct {
-	app.InitializerModule
-	app.DefaultLoggerModule
+	daf.InitializerModule
+	daf.DefaultLoggerModule
 }
 
-func (m *DemoNoConfModule) ApplyConfig(_ app.NoConfig) error {
+func (m *DemoNoConfModule) ApplyConfig(_ daf.NoConfig) error {
 	return nil
 }
 
