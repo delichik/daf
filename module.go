@@ -43,14 +43,6 @@ type ModuleEntry struct {
 	_funAdditionalLogger reflect.Value
 	_funOnExit           reflect.Value
 	_funSetConfigManager reflect.Value
-
-	Name             func() string
-	ApplyConfig      func(cfg config.ModuleConfig) error
-	OnInit           func(ctx context.Context) error
-	OnRun            func() error
-	AdditionalLogger func() bool
-	OnExit           func()
-	SetConfigManager func(cm *config.Manager)
 }
 
 func nullableError(in any) error {
@@ -62,6 +54,14 @@ func nullableError(in any) error {
 	}
 }
 
+func mustGetFunc(v reflect.Value, name string) reflect.Value {
+	f := v.MethodByName(name)
+	if f.IsNil() || !f.IsValid() || f.IsZero() {
+		panic("method not found: " + name)
+	}
+	return f
+}
+
 func newModuleEntry(module any) *ModuleEntry {
 	_, file, line, _ := runtime.Caller(3)
 	moduleEntry := &ModuleEntry{
@@ -70,45 +70,45 @@ func newModuleEntry(module any) *ModuleEntry {
 	}
 
 	rv := reflect.ValueOf(module)
-	moduleEntry._funName = rv.MethodByName("Name")
-	moduleEntry.Name = func() string {
-		res := moduleEntry._funName.Call([]reflect.Value{})
-		return (res[0].Interface()).(string)
-	}
-
-	moduleEntry._funApplyConfig = rv.MethodByName("ApplyConfig")
-	moduleEntry.ApplyConfig = func(cfg config.ModuleConfig) error {
-		res := moduleEntry._funApplyConfig.Call([]reflect.Value{reflect.ValueOf(cfg)})
-		return nullableError(res[0].Interface())
-	}
-
-	moduleEntry._funOnInit = rv.MethodByName("OnInit")
-	moduleEntry.OnInit = func(ctx context.Context) error {
-		res := moduleEntry._funOnInit.Call([]reflect.Value{reflect.ValueOf(ctx)})
-		return nullableError(res[0].Interface())
-	}
-
-	moduleEntry._funOnRun = rv.MethodByName("OnRun")
-	moduleEntry.OnRun = func() error {
-		res := moduleEntry._funOnRun.Call([]reflect.Value{})
-		return nullableError(res[0].Interface())
-	}
-
-	moduleEntry._funAdditionalLogger = rv.MethodByName("AdditionalLogger")
-	moduleEntry.AdditionalLogger = func() bool {
-		res := moduleEntry._funAdditionalLogger.Call([]reflect.Value{})
-		return (res[0].Interface()).(bool)
-	}
-
-	moduleEntry._funOnExit = rv.MethodByName("OnExit")
-	moduleEntry.OnExit = func() {
-		moduleEntry._funOnExit.Call([]reflect.Value{})
-	}
-
-	moduleEntry._funSetConfigManager = rv.MethodByName("SetConfigManager")
-	moduleEntry.SetConfigManager = func(cm *config.Manager) {
-		moduleEntry._funSetConfigManager.Call([]reflect.Value{reflect.ValueOf(cm)})
-	}
-
+	moduleEntry._funName = mustGetFunc(rv, "Name")
+	moduleEntry._funApplyConfig = mustGetFunc(rv, "ApplyConfig")
+	moduleEntry._funOnInit = mustGetFunc(rv, "OnInit")
+	moduleEntry._funOnRun = mustGetFunc(rv, "OnRun")
+	moduleEntry._funAdditionalLogger = mustGetFunc(rv, "AdditionalLogger")
+	moduleEntry._funOnExit = mustGetFunc(rv, "OnExit")
+	moduleEntry._funSetConfigManager = mustGetFunc(rv, "SetConfigManager")
 	return moduleEntry
+}
+
+func (m *ModuleEntry) Name() string {
+	res := m._funName.Call([]reflect.Value{})
+	return (res[0].Interface()).(string)
+}
+
+func (m *ModuleEntry) ApplyConfig(cfg config.ModuleConfig) error {
+	res := m._funApplyConfig.Call([]reflect.Value{reflect.ValueOf(cfg)})
+	return nullableError(res[0].Interface())
+}
+
+func (m *ModuleEntry) OnInit(ctx context.Context) error {
+	res := m._funOnInit.Call([]reflect.Value{reflect.ValueOf(ctx)})
+	return nullableError(res[0].Interface())
+}
+
+func (m *ModuleEntry) OnRun() error {
+	res := m._funOnRun.Call([]reflect.Value{})
+	return nullableError(res[0].Interface())
+}
+
+func (m *ModuleEntry) AdditionalLogger() bool {
+	res := m._funAdditionalLogger.Call([]reflect.Value{})
+	return (res[0].Interface()).(bool)
+}
+
+func (m *ModuleEntry) OnExit() {
+	m._funOnExit.Call([]reflect.Value{})
+}
+
+func (m *ModuleEntry) SetConfigManager(cm *config.Manager) {
+	m._funSetConfigManager.Call([]reflect.Value{reflect.ValueOf(cm)})
 }
