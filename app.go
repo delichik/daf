@@ -16,95 +16,107 @@ import (
 
 	"github.com/delichik/daf/config"
 	"github.com/delichik/daf/logger"
+	"github.com/delichik/daf/utils"
 )
 
 var (
-	gCtx                 context.Context
-	gCancel              context.CancelFunc
+	gCtx          context.Context
+	gCancel       context.CancelFunc
+	beforeRunCall func()
+	afterRunCall  func()
+
 	cm                   *config.Manager
-	beforeRunCall        func()
-	afterRunCall         func()
-	modules              map[string]*ModuleEntry
-	orderedModules       []*ModuleEntry
-	autoLoadModuleCount  int
 	disableRefreshConfig bool
+
+	modules             map[string]*ModuleEntry
+	orderedModules      []*ModuleEntry
+	autoLoadModuleCount int
+
+	flagSet *flag.FlagSet
 )
 
 func init() {
+	flagSet = flag.NewFlagSet(os.Args[0], flag.ContinueOnError)
 	gCtx, gCancel = context.WithCancel(context.Background())
 	modules = map[string]*ModuleEntry{}
 }
 
-type CommandLineVars struct {
+type AllowedFlagProtoVar interface {
+	int | string | bool | float64
+}
+
+type internalCommandLineVars struct {
 	ConfigPath string
 	Help       bool
 	Version    bool
 }
 
-func parseFlags(version string) CommandLineVars {
-	clvs := CommandLineVars{}
-	flag.StringVar(&clvs.ConfigPath, "c", "config.yaml", "Config path")
-	flag.BoolVar(&clvs.Help, "h", false, "Print help")
-	flag.BoolVar(&clvs.Version, "v", false, "Print version")
-	flag.Parse()
-	if clvs.Help {
-		flag.Usage()
-		os.Exit(1)
+func RegisterFlagVar[T AllowedFlagProtoVar](value *T, name string, defaultValue T, usage string) {
+	switch v := any(value).(type) {
+	case *int:
+		dv := any(defaultValue).(int)
+		flagSet.IntVar(v, name, dv, usage)
+	case *string:
+		dv := any(defaultValue).(string)
+		flagSet.StringVar(v, name, dv, usage)
+	case *bool:
+		dv := any(defaultValue).(bool)
+		flagSet.BoolVar(v, name, dv, usage)
+	case *float64:
+		dv := any(defaultValue).(float64)
+		flagSet.Float64Var(v, name, dv, usage)
+	default:
+		panic("unsupported flag type: " + reflect.TypeOf(value).String())
 	}
-	if clvs.Version {
-		fmt.Println("Go version:\t\t", runtime.Version())
-		fmt.Println("Binary version:\t", version)
-		os.Exit(1)
-	}
-	return clvs
 }
 
+// Deprecated: Now framework will detect auto-loading automatically.
+// Use RegisterModule instead.
 func RegisterAutoLoadModule[T config.ModuleConfig](module Module[T]) {
+	if utils.IsCalledByMainDirect(1) {
+
+	} else if utils.IsCalledByInit(1) {
+		autoLoadModuleCount++
+	} else {
+		panic("module must be registered in init() or directly under main()")
+	}
 	registerModule(module)
-	autoLoadModuleCount++
 }
 
+// RegisterModule Register a module.
+// The module registered in main() directly, be called as invoked module, will
+// always be loaded.
+// The module registered in init(), be called as auto module, will be loaded when
+// it has been used in invoked module.
 func RegisterModule[T config.ModuleConfig](module Module[T]) {
+	if utils.IsCalledByMainDirect(1) {
+		// just pass-through
+	} else if utils.IsCalledByInit(1) {
+		autoLoadModuleCount++
+	} else {
+		panic("module must be registered in init() or directly under main()")
+	}
 	registerModule(module)
 }
 
+// DisableRefreshConfig Disable auto refresh config
 func DisableRefreshConfig() {
 	disableRefreshConfig = true
 }
 
-func registerModule[T config.ModuleConfig](module Module[T]) {
-	existedModule, ok := modules[module.Name()]
-	if ok {
-		panic(fmt.Errorf("module %s already registered by %s",
-			existedModule.Name(), existedModule.registerer))
-	}
-
-	moduleEntry := newModuleEntry(module)
-	modules[module.Name()] = moduleEntry
-	orderedModules = append(orderedModules, moduleEntry)
-
-	rt := reflect.TypeFor[T]()
-	rv := reflect.Zero(rt)
-	if rt.Kind() == reflect.Pointer {
-		rv = reflect.New(rt.Elem())
-	}
-
-	if !rt.Implements(noConfigIfaceType) {
-		cfg := rv.Interface().(config.ModuleConfig)
-		config.RegisterModuleConfig(module.Name(), cfg)
-	}
-}
-
+// BeforeRun To execute codes before Run().
 func BeforeRun(call func()) {
 	beforeRunCall = call
 }
 
+// AfterRun To execute codes after Run().
 func AfterRun(call func()) {
 	afterRunCall = call
 }
 
+// Run Prepare the configs and start up the app.
 func Run(version string) {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(gCtx)
 	clvs := parseFlags(version)
 	cm = config.NewManager(ctx, clvs.ConfigPath, !disableRefreshConfig)
 	for _, module := range orderedModules {
@@ -149,7 +161,7 @@ func Run(version string) {
 		if !module.noConfig {
 			cfg := cm.GetModuleConfig(module.Name())
 			if cfg == nil {
-				logger.Debug("Skip no config module", zap.String("name", module.Name()))
+				logger.Warn("Module has no config, but requires a config", zap.String("name", module.Name()))
 				continue
 			}
 			logger.Debug("Applying module config", zap.String("name", module.Name()))
@@ -182,19 +194,63 @@ func Run(version string) {
 	logger.Warn("App shutdown")
 
 	cancel()
-	for _, module := range orderedModules {
-		if !module.noConfig {
-			cfg := cm.GetModuleConfig(module.Name())
-			if cfg == nil {
-				continue
-			}
-		}
+	for _, module := range orderedModules[autoLoadModuleCount:] {
+		module.OnExit()
+	}
+	for _, module := range orderedModules[:autoLoadModuleCount] {
 		module.OnExit()
 	}
 }
 
+// Shutdown Stop the app and exit.
 func Shutdown() {
 	gCancel()
+}
+
+func parseFlags(version string) internalCommandLineVars {
+	clvs := internalCommandLineVars{}
+	flagSet.StringVar(&clvs.ConfigPath, "config", "config.yaml", "Config path")
+	flagSet.BoolVar(&clvs.Help, "help", false, "Print help")
+	flagSet.BoolVar(&clvs.Version, "version", false, "Print version")
+	err := flagSet.Parse(os.Args[1:])
+	if err != nil {
+		panic("parse flags failed: " + err.Error())
+	}
+	if clvs.Help {
+		flagSet.Usage()
+		os.Exit(1)
+	}
+	if clvs.Version {
+		fmt.Println("Go version:\t\t", runtime.Version())
+		fmt.Println("Binary version:\t", version)
+		os.Exit(1)
+	}
+	return clvs
+}
+
+func registerModule[T config.ModuleConfig](module Module[T]) {
+	existedModule, ok := modules[module.Name()]
+	if ok {
+		panic(fmt.Errorf("module %s already registered by %s",
+			existedModule.Name(), existedModule.registerer))
+	}
+
+	moduleEntry := newModuleEntry(module)
+	modules[module.Name()] = moduleEntry
+	orderedModules = append(orderedModules, moduleEntry)
+
+	rt := reflect.TypeFor[T]()
+	rv := reflect.Zero(rt)
+	if rt.Kind() == reflect.Pointer {
+		rv = reflect.New(rt.Elem())
+	}
+
+	if !rt.Implements(noConfigIfaceType) {
+		cfg := rv.Interface().(config.ModuleConfig)
+		config.RegisterModuleConfig(module.Name(), cfg)
+	} else {
+		moduleEntry.noConfig = true
+	}
 }
 
 func ReloadConfig(name string, cfg config.ModuleConfig) {
